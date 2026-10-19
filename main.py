@@ -13,10 +13,11 @@ def main() -> None:
     owner.add_pet(biscuit)
     owner.add_pet(mochi)
 
-    biscuit.add_task(Task("Morning walk", 30, "high", category="walk",
-                          preferred_time=time(8, 0), due_time=time(10, 0), frequency="daily"))
+    # Tasks are deliberately added out of chronological order.
     biscuit.add_task(Task("Brush coat", 25, "low", category="grooming",
                           preferred_time=time(18, 0)))
+    biscuit.add_task(Task("Morning walk", 30, "high", category="walk",
+                          preferred_time=time(8, 0), due_time=time(10, 0), frequency="daily"))
     mochi.add_task(Task("Give medication", 5, "high", category="meds",
                         preferred_time=time(9, 0), due_time=time(9, 30), frequency="daily"))
     mochi.add_task(Task("Breakfast", 10, "high", category="feeding",
@@ -46,6 +47,25 @@ def main() -> None:
     walk = scheduler.filter_tasks(pet_name="Biscuit", category="walk")[0]
     new_task = scheduler.complete_task(walk)
     print(f"  '{walk.title}' done; next occurrence created: {new_task is not None}")
+
+    print("\n--- Filter by status: completed vs pending ---")
+    for label, done in (("Completed", True), ("Pending", False)):
+        print(f"  {label}:")
+        for task in scheduler.filter_tasks(completed=done):
+            print(f"    {task.title} ({task.pet_name})")
+
+    print("\n--- Filter by pet AND status (Biscuit, pending) ---")
+    for task in scheduler.filter_tasks(pet_name="Biscuit", completed=False):
+        print(f"  {task.title}")
+
+    print("\n--- Conflict detection (two tasks forced to overlap) ---")
+    plan = scheduler.generate_plan()
+    clash = plan.scheduled[0]
+    plan.scheduled.append(
+        type(clash)(clash.task, clash.start_time, clash.end_time, "forced overlap")
+    )
+    for a, b in scheduler.detect_conflicts(plan.scheduled):
+        print(f"  CONFLICT: {a.task.title} overlaps {b.task.title}")
 
 
 if __name__ == "__main__":
