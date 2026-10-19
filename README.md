@@ -148,3 +148,22 @@ Describe your app in numbered steps so a reader can follow along without watchin
 5. <!-- Add more steps as needed -->
 
 **Screenshot or video** *(optional)*: <!-- Insert a screenshot or link to a demo video here -->
+
+
+## Testing PawPal+
+
+command to run tests (python -m pytest)
+
+(base) riyakumbhar@Riyas-MacBook-Air ai110-module2show-pawpal-starter % source /Users/riyakumbhar/ai110-module2show-pawpal-starter/.venv/bin/activate
+(.venv) (base) riyakumbhar@Riyas-MacBook-Air ai110-module2show-pawpal-starter % python -m pytest
+================================================================= test session starts =================================================================
+platform darwin -- Python 3.14.4, pytest-9.1.1, pluggy-1.7.0
+rootdir: /Users/riyakumbhar/ai110-module2show-pawpal-starter
+plugins: anyio-4.15.1
+collected 24 items                                                                                                                                    
+
+tests/test_pawpal.py ........................                                                                                                   [100%]
+
+================================================================= 24 passed in 0.02s ==================================================================
+(.venv) (base) riyakumbhar@Riyas-MacBook-Air ai110-module2show-pawpal-starter % 
+

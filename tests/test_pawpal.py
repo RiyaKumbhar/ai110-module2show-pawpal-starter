@@ -146,3 +146,72 @@ def test_find_time_conflicts_none_when_clear(owner):
     dog.add_task(Task("Walk", 30, preferred_time=time(9, 0)))
     dog.add_task(Task("Feed", 10, preferred_time=time(9, 30)))
     assert Scheduler(owner).find_time_conflicts() == []
+
+
+# --- sorting correctness: chronological order --------------------------------
+def test_sort_by_time_returns_chronological_order(owner):
+    late = Task("late", 10, preferred_time=time(17, 0))
+    early = Task("early", 10, preferred_time=time(8, 0))
+    mid = Task("mid", 10, preferred_time=time(9, 30))
+    assert Scheduler(owner).sort_by_time([late, early, mid]) == [early, mid, late]
+
+
+def test_sort_by_time_puts_untimed_tasks_last_and_breaks_ties_by_priority(owner):
+    anytime = Task("anytime", 10, "high")
+    low = Task("low", 10, "low", preferred_time=time(9, 0))
+    high = Task("high", 10, "high", preferred_time=time(9, 0))
+    noon = Task("noon", 10, preferred_time=time(12, 0))
+    assert Scheduler(owner).sort_by_time([anytime, noon, low, high]) == [high, low, noon, anytime]
+
+
+def test_sort_handles_empty_and_single_lists(owner):
+    s = Scheduler(owner)
+    t = Task("solo", 10)
+    assert s.sort_by_time([]) == [] and s.sort_tasks([]) == []
+    assert s.sort_by_time([t]) == [t]
+
+
+# --- recurrence logic --------------------------------------------------------
+def test_completing_daily_task_creates_task_due_tomorrow_on_same_pet(owner):
+    dog = owner.pets[0]
+    walk = Task("Walk", 30, frequency="daily")
+    dog.add_task(walk)
+    nxt = Scheduler(owner).complete_task(walk)
+    assert nxt in dog.tasks
+    assert nxt.title == "Walk" and nxt.pet_name == "Biscuit"
+    assert nxt.due_date == date.today() + timedelta(days=1)
+
+
+def test_next_occurrence_rolls_over_month_and_year_end():
+    t = Task("Walk", 30, frequency="daily")
+    assert t.next_occurrence(today=date(2026, 12, 31)).due_date == date(2027, 1, 1)
+    assert t.next_occurrence(today=date(2028, 2, 28)).due_date == date(2028, 2, 29)
+
+
+# --- conflict detection: duplicate / adjacent times --------------------------
+def test_scheduler_flags_tasks_at_exact_same_time(owner):
+    dog, cat = owner.pets
+    dog.add_task(Task("Walk", 30, preferred_time=time(9, 0)))
+    cat.add_task(Task("Meds", 5, preferred_time=time(9, 0)))
+    warnings = Scheduler(owner).find_time_conflicts()
+    assert len(warnings) == 1
+    assert "Walk" in warnings[0] and "Meds" in warnings[0]
+
+
+def test_back_to_back_tasks_are_not_conflicts(owner):
+    dog = owner.pets[0]
+    dog.add_task(Task("Walk", 30, preferred_time=time(9, 0)))
+    dog.add_task(Task("Feed", 10, preferred_time=time(9, 30)))
+    assert Scheduler(owner).find_time_conflicts() == []
+    a = ScheduledItem(Task("A", 30), time(9, 0), time(9, 30))
+    b = ScheduledItem(Task("B", 10), time(9, 30), time(9, 40))
+    assert Scheduler(owner).detect_conflicts([a, b]) == []
+
+
+def test_completed_tasks_do_not_trigger_time_conflicts(owner):
+    dog = owner.pets[0]
+    done = Task("Walk", 30, preferred_time=time(9, 0))
+    dog.add_task(done)
+    dog.add_task(Task("Meds", 5, preferred_time=time(9, 0)))
+    done.mark_complete()
+    assert Scheduler(owner).find_time_conflicts() == []
