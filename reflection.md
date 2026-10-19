@@ -32,13 +32,11 @@ I updated `diagrams/uml.mmd` to match. One bottleneck I noticed but have not fix
 
 **a. Constraints and priorities**
 
-- What constraints does your scheduler consider (for example: time, priority, preferences)?
-- How did you decide which constraints mattered most?
+The scheduler considers three constraints: the owner's total available minutes for the day, task priority (high, medium, low), and each task's `due_time`. `generate_plan` sorts pending tasks by priority, then earliest due time, then shortest duration, and adds them until the time budget runs out. Anything that doesn't fit goes into the plan's skipped list with a reason. I made the time budget a hard limit and priority the main sort key because a pet owner's real problem is "I only have 90 minutes, what must not be missed?" Medication and feeding should beat grooming. `preferred_time` is only used by `sort_by_time` for display; the planner does not use it to place tasks.
 
 **b. Tradeoffs**
 
-- Describe one tradeoff your scheduler makes.
-- Why is that tradeoff reasonable for this scenario?
+The planner is greedy and places tasks back to back from the day start (8:00 by default) in priority order. It ignores `preferred_time`, so a 6 PM task can be scheduled at 8:40 AM. It also never looks ahead, so a short low-priority task can be skipped even when a different combination of tasks would have used the time better. That is simple, predictable, and easy to explain ("why:" is printed for each item), which suits a small personal app, and the plan never overlaps because tasks are laid out sequentially. The cost is realism: a human would want the evening brush at 6 PM. Conflict detection (`detect_conflicts`) therefore matters mostly for plans built or edited by hand, since the generated plan cannot overlap on its own.
 
 ---
 
@@ -68,13 +66,11 @@ I used Claude Code for design brainstorming, code generation, and review. I aske
 
 **a. What you tested**
 
-- What behaviors did you test?
-- Why were these tests important?
+I wrote 11 pytest tests in `tests/test_pawpal.py`. They cover marking a task complete, rejecting an invalid priority, `add_task` setting `pet_name`, collecting tasks across pets, sort order (priority, then due time, then duration), filtering by pet and status, the time limit holding across two pets, no overlaps and completed tasks skipped, conflict detection on an overlapping pair, and recurring versus one-off completion. I tested these because they are the places where a silent bug would give an owner a wrong plan without any error.
 
 **b. Confidence**
 
-- How confident are you that your scheduler works correctly?
-- What edge cases would you test next if you had more time?
+I'm fairly confident in the core behavior: all 11 tests pass and I read the `main.py` output against the inputs. I'm less confident about edge cases I haven't tested: a task longer than the whole day, tasks running past midnight (the code skips them, but no test checks it), two pets with the same name (the `pet_name` lookup in `complete_task` would pick the first), an empty owner with no pets, and completing the same recurring task twice, which creates two copies. I would test those next, plus sorting when `preferred_time` is missing on every task.
 
 ---
 
@@ -82,12 +78,12 @@ I used Claude Code for design brainstorming, code generation, and review. I aske
 
 **a. What went well**
 
-- What part of this project are you most satisfied with?
+I'm most satisfied with keeping the data classes simple and putting all the logic (sorting, filtering, conflicts, recurrence, planning) in `Scheduler`. It made the logic easy to test without any UI, and the same code drives both the `main.py` demo and the Streamlit app. Giving each plan a reason for every scheduled and skipped task also makes the result explainable.
 
 **b. What you would improve**
 
-- If you had another iteration, what would you improve or redesign?
+I'd make the planner respect `preferred_time` and fill gaps instead of stacking everything from 8:00. I'd also give recurring tasks an actual due date (the next occurrence is currently just a copy with no date), and add real calendar dates to tasks so a "weekly" task is not only a label.
 
 **c. Key takeaway**
 
-- What is one important thing you learned about designing systems or working with AI on this project?
+AI is fast at producing a plausible first version, but it was only useful when I gave it a specific deliverable and then checked the result myself. The planner it generated ran without errors and still ignored `preferred_time`; I only noticed by reading the output against my inputs. Tests and reading the real output caught what "it runs" did not.
