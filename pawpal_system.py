@@ -8,6 +8,8 @@ from datetime import date, datetime, time, timedelta
 from uuid import uuid4
 
 PRIORITY_ORDER = {"high": 0, "medium": 1, "low": 2}
+# How far ahead the next occurrence of a recurring task lands.
+RECURRENCE_DELTA = {"daily": timedelta(days=1), "weekly": timedelta(weeks=1)}
 
 
 @dataclass
@@ -18,6 +20,7 @@ class Task:
     category: str = "general"  # walk, feeding, meds, enrichment, grooming
     preferred_time: time | None = None
     due_time: time | None = None
+    due_date: date | None = None  # None means "today / whenever"
     pet_name: str = ""  # set by Pet.add_task so a plan can say which pet a task is for
     frequency: str = "once"  # "once" | "daily" | "weekly"
     completed: bool = False
@@ -31,6 +34,20 @@ class Task:
     def mark_complete(self) -> None:
         """Mark this task as done."""
         self.completed = True
+
+    def next_occurrence(self, today: date | None = None) -> Task | None:
+        """Return a fresh copy due today + 1 day (daily) or + 7 days (weekly).
+
+        Returns None for one-off tasks.
+        """
+        delta = RECURRENCE_DELTA.get(self.frequency)
+        if delta is None:
+            return None
+        nxt = copy(self)
+        nxt.completed = False
+        nxt.id = uuid4().hex[:8]
+        nxt.due_date = (today or date.today()) + delta
+        return nxt
 
     def update(self, **changes) -> None:
         """Change task fields by name and re-validate the result."""
@@ -222,18 +239,39 @@ class Scheduler:
             if a.overlaps(b)
         ]
 
+    def find_time_conflicts(self, tasks: list[Task] | None = None) -> list[str]:
+        """Lightweight check: warn about tasks whose preferred times overlap.
+
+        Works for the same pet or different pets, ignores completed tasks and
+        tasks with no preferred time, and returns warning strings instead of
+        raising, so the caller can print them and carry on.
+        """
+        pool = self.owner.get_all_tasks() if tasks is None else tasks
+        timed = sorted(
+            (t for t in pool if t.preferred_time and not t.completed),
+            key=lambda t: t.preferred_time,
+        )
+        warnings = []
+        for n, a in enumerate(timed):
+            a_end = _add_minutes(a.preferred_time, a.duration_minutes) or time.max
+            for b in timed[n + 1 :]:
+                if b.preferred_time >= a_end:
+                    break  # sorted by start, so nothing later can overlap a
+                scope = "same pet" if a.pet_name == b.pet_name else "different pets"
+                warnings.append(
+                    f"WARNING: '{a.title}' ({a.pet_name}) at {a.preferred_time:%H:%M} "
+                    f"overlaps '{b.title}' ({b.pet_name}) at {b.preferred_time:%H:%M} [{scope}]"
+                )
+        return warnings
+
     # --- algorithmic feature 4: recurring tasks -----------------------------
     def complete_task(self, task: Task) -> Task | None:
         """Mark a task done; daily/weekly tasks get a fresh copy for next time."""
         task.mark_complete()
-        if task.frequency == "once":
-            return None
         pet = next((p for p in self.owner.pets if p.name == task.pet_name), None)
-        if pet is None:
+        nxt = task.next_occurrence()
+        if nxt is None or pet is None:
             return None
-        nxt = copy(task)
-        nxt.completed = False
-        nxt.id = uuid4().hex[:8]
         pet.add_task(nxt)
         return nxt
 
@@ -241,7 +279,12 @@ class Scheduler:
     def generate_plan(self) -> DailyPlan:
         """Fit pending tasks from all pets into the owner's available time."""
         plan = DailyPlan()
-        pending = [t for t in self.owner.get_all_tasks() if not t.completed]
+        today = date.today()
+        pending = [
+            t
+            for t in self.owner.get_all_tasks()
+            if not t.completed and (t.due_date is None or t.due_date <= today)
+        ]
         clock = self.day_start
         for task in self.sort_tasks(pending):
             if plan.total_minutes + task.duration_minutes > self.owner.available_minutes:

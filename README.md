@@ -112,19 +112,30 @@ Sample test output:
 
 ```
 tests/test_pawpal.py ...........                                         [100%]
-============================== 11 passed in 0.01s ==============================
+============================== 16 passed in 0.01s ==============================
 ```
 
-The 11 tests cover task completion, adding tasks to pets, gathering tasks across pets, sorting, filtering, time-limited planning, conflict detection, and recurring tasks.
+The 16 tests cover task completion, adding tasks to pets, gathering tasks across pets, sorting, filtering, time-limited planning, conflict detection and same-time warnings, and recurring tasks with due dates.
 
 ## 📐 Smarter Scheduling
 
-| Feature | Method(s) | Notes |
-|---------|-----------|-------|
-| Task sorting | `sort_tasks`, `sort_by_time` | Priority, then due time, then shortest; or by preferred time |
-| Filtering | `filter_tasks`, `generate_plan` | Filter by pet, status, category; tasks that don't fit are skipped with a reason |
-| Conflict handling | `detect_conflicts` | Returns every pair of overlapping scheduled items |
-| Recurring tasks | `complete_task` | Completing a daily or weekly task adds a fresh copy to the pet |
+All of these live on `Scheduler` in `pawpal_system.py` (except `Task.next_occurrence`).
+
+### Sorting
+- **`Scheduler.sort_tasks(tasks)`**: orders by priority (high to low), then earliest `due_time`, then shortest duration. `generate_plan` uses this.
+- **`Scheduler.sort_by_time(tasks)`**: orders by `preferred_time` (tasks with none go last), with priority as the tiebreaker. It uses `sorted()` with a lambda key that returns a tuple.
+
+### Filtering
+- **`Scheduler.filter_tasks(pet_name=None, completed=None, category=None)`**: filters across all of the owner's pets. Any combination works, for example `filter_tasks(pet_name="Mochi", completed=False)`.
+- **`Scheduler.generate_plan()`** also filters: it skips completed tasks and tasks whose `due_date` is in the future, and tasks that don't fit the time budget go in the plan's skipped list with a reason.
+
+### Conflict detection
+- **`Scheduler.find_time_conflicts(tasks=None)`**: a lightweight check on the times the owner asked for (`preferred_time` plus duration). It covers the same pet and different pets, and returns warning strings such as `WARNING: 'Vet call' (Biscuit) at 09:00 overlaps 'Give medication' (Mochi) at 09:00 [different pets]`. It never raises, so the program keeps running.
+- **`Scheduler.detect_conflicts(items)`**: checks a built plan and returns every pair of overlapping `ScheduledItem`s.
+
+### Recurring tasks
+- **`Scheduler.complete_task(task)`**: marks the task done and, for daily or weekly tasks, adds the next occurrence to the same pet.
+- **`Task.next_occurrence()`**: builds that copy (new id, not completed) with `due_date` = today + `timedelta(days=1)` for daily or `timedelta(weeks=1)` for weekly. One-off tasks return `None`.
 
 ## 📸 Demo Walkthrough
 

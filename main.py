@@ -47,6 +47,8 @@ def main() -> None:
     walk = scheduler.filter_tasks(pet_name="Biscuit", category="walk")[0]
     new_task = scheduler.complete_task(walk)
     print(f"  '{walk.title}' done; next occurrence created: {new_task is not None}")
+    if new_task:
+        print(f"  next '{new_task.title}' is due {new_task.due_date:%A, %b %d}")
 
     print("\n--- Filter by status: completed vs pending ---")
     for label, done in (("Completed", True), ("Pending", False)):
@@ -57,6 +59,14 @@ def main() -> None:
     print("\n--- Filter by pet AND status (Biscuit, pending) ---")
     for task in scheduler.filter_tasks(pet_name="Biscuit", completed=False):
         print(f"  {task.title}")
+
+    print("\n--- Same-time warnings (lightweight check) ---")
+    biscuit.add_task(Task("Vet call", 15, "medium", category="meds",
+                          preferred_time=time(9, 0)))  # same time as Mochi's medication
+    biscuit.add_task(Task("Teeth brushing", 10, "low", category="grooming",
+                          preferred_time=time(9, 5)))  # overlaps Vet call, same pet
+    for warning in scheduler.find_time_conflicts():
+        print(f"  {warning}")
 
     print("\n--- Conflict detection (two tasks forced to overlap) ---")
     plan = scheduler.generate_plan()

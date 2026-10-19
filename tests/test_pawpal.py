@@ -1,4 +1,4 @@
-from datetime import time
+from datetime import date, time, timedelta
 
 import pytest
 
@@ -103,3 +103,46 @@ def test_complete_one_off_task_creates_nothing(owner):
     dog.add_task(task)
     assert Scheduler(owner).complete_task(task) is None
     assert len(dog.tasks) == 1
+
+
+def test_daily_task_next_due_tomorrow(owner):
+    dog = owner.pets[0]
+    walk = Task("Walk", 30, frequency="daily")
+    dog.add_task(walk)
+    nxt = Scheduler(owner).complete_task(walk)
+    assert nxt.due_date == date.today() + timedelta(days=1)
+
+
+def test_weekly_task_next_due_in_seven_days(owner):
+    dog = owner.pets[0]
+    bath = Task("Bath", 30, frequency="weekly")
+    dog.add_task(bath)
+    nxt = Scheduler(owner).complete_task(bath)
+    assert nxt.due_date == date.today() + timedelta(days=7)
+
+
+def test_future_occurrence_not_in_todays_plan(owner):
+    dog = owner.pets[0]
+    walk = Task("Walk", 30, frequency="daily")
+    dog.add_task(walk)
+    sched = Scheduler(owner)
+    sched.complete_task(walk)
+    assert sched.generate_plan().scheduled == []
+
+
+def test_find_time_conflicts_warns_same_and_different_pets(owner):
+    dog, cat = owner.pets[0], owner.pets[1]
+    dog.add_task(Task("Walk", 30, preferred_time=time(9, 0)))
+    cat.add_task(Task("Meds", 5, preferred_time=time(9, 0)))
+    dog.add_task(Task("Brush", 10, preferred_time=time(9, 10)))
+    warnings = Scheduler(owner).find_time_conflicts()
+    assert len(warnings) == 2
+    assert any("different pets" in w for w in warnings)
+    assert any("same pet" in w for w in warnings)
+
+
+def test_find_time_conflicts_none_when_clear(owner):
+    dog = owner.pets[0]
+    dog.add_task(Task("Walk", 30, preferred_time=time(9, 0)))
+    dog.add_task(Task("Feed", 10, preferred_time=time(9, 30)))
+    assert Scheduler(owner).find_time_conflicts() == []
