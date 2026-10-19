@@ -24,7 +24,7 @@ Yes. After writing the class skeletons, I reviewed them for missing relationship
 - **Priority is validated.** Priority was a free-form string, so a typo like "urgent" would silently break sorting. Task now raises a `ValueError` unless the priority is high, medium, or low, both on creation and on update.
 - **`Owner.get_pending_tasks()` added.** The Scheduler should only plan tasks that aren't completed, and across all pets. This method gives it that list in one call instead of making it filter every time.
 
-I updated `diagrams/uml.mmd` to match. One bottleneck I noticed but have not fixed yet is recurring tasks: marking a daily or weekly task complete doesn't create the next occurrence. I plan to handle that when I implement the scheduling logic.
+I updated the UML to match. One bottleneck I noticed at that point was recurring tasks: marking a daily or weekly task complete didn't create the next occurrence. I fixed that when I implemented the scheduling logic (`Scheduler.complete_task` and `Task.next_occurrence`), and the final diagram is `diagrams/uml_final.mmd`.
 
 ---
 
@@ -58,7 +58,14 @@ I used Claude Code for design brainstorming, code generation, and review. I aske
 
 **What I rejected or corrected:** The AI flagged that the planner ignores `preferred_time` and places tasks back-to-back, and I treated that as a known limitation instead of accepting the output as finished.
 
-**How I verified it:** I did not trust the generated code on sight. I ran `python main.py` and read the schedule against the inputs (the task that didn't fit was skipped with the right reason), and I ran `python -m pytest`, where all 11 tests pass. The tests check behavior, such as sorting order, the time limit across two pets, no overlaps, and recurring tasks creating a fresh copy, so they would fail if the logic were wrong.
+**How I verified it:** I did not trust the generated code on sight. I ran `python main.py` and read the schedule against the inputs (the task that didn't fit was skipped with the right reason), and I ran `python -m pytest`, where all 24 tests pass. The tests check behavior, such as sorting order, the time limit across two pets, no overlaps, and recurring tasks creating a fresh copy, so they would fail if the logic were wrong.
+
+**c. AI strategy**
+
+- **Most effective features:** The biggest help was working in a fixed order and giving the assistant one concrete deliverable at a time: brainstorm the objects, draft the UML, generate dataclass skeletons from it, review the skeleton, then implement the scheduler. Asking it to review my skeleton for missing relationships found the `pet_name` gap before I had built anything on top of it. It was also useful that it could run `python main.py` and `pytest` itself, so every change came with real output I could check, and that I could paste the grading rubric in and have it list what was still missing.
+- **A suggestion I modified to keep the design clean:** My first version of recurring tasks put the copy-and-reschedule logic inside `Scheduler.complete_task`. I changed it so `Task.next_occurrence()` builds the next copy, with a real `due_date`, and the Scheduler only decides when to call it. A task knows what its own recurrence means, and the Scheduler stays focused on organizing tasks across pets. I also kept the Scheduler as the only place with planning logic instead of letting `Pet` or `Task` start sorting or scheduling.
+- **Separate chat sessions:** Splitting the work by phase (design and UML, then the logic layer, then the Streamlit UI, then docs) kept each conversation short and focused, so the assistant wasn't carrying old decisions around. When I moved to a new phase I gave it only what it needed, such as the final `pawpal_system.py`, which made the answers more specific and easier to check.
+- **What I learned about being the lead architect:** The AI can write a lot of code quickly, but it does not decide what the system should be. I had to make the calls: which classes exist, what each one owns, what the Scheduler is allowed to know, and what counts as correct. Its output ran without errors yet still ignored `preferred_time`, and I only caught that by reading the results against my inputs. My job was to set the design, give small and specific tasks, and verify everything with tests and real output instead of trusting that it looked right.
 
 ---
 
@@ -66,11 +73,11 @@ I used Claude Code for design brainstorming, code generation, and review. I aske
 
 **a. What you tested**
 
-I wrote 11 pytest tests in `tests/test_pawpal.py`. They cover marking a task complete, rejecting an invalid priority, `add_task` setting `pet_name`, collecting tasks across pets, sort order (priority, then due time, then duration), filtering by pet and status, the time limit holding across two pets, no overlaps and completed tasks skipped, conflict detection on an overlapping pair, and recurring versus one-off completion. I tested these because they are the places where a silent bug would give an owner a wrong plan without any error.
+I wrote 24 pytest tests in `tests/test_pawpal.py`. They cover marking a task complete, rejecting an invalid priority, `add_task` setting `pet_name`, collecting tasks across pets, sort order (priority, then due time, then duration), filtering by pet and status, the time limit holding across two pets, no overlaps and completed tasks skipped, conflict detection on an overlapping pair, and recurring versus one-off completion. I tested these because they are the places where a silent bug would give an owner a wrong plan without any error.
 
 **b. Confidence**
 
-I'm fairly confident in the core behavior: all 11 tests pass and I read the `main.py` output against the inputs. I'm less confident about edge cases I haven't tested: a task longer than the whole day, tasks running past midnight (the code skips them, but no test checks it), two pets with the same name (the `pet_name` lookup in `complete_task` would pick the first), an empty owner with no pets, and completing the same recurring task twice, which creates two copies. I would test those next, plus sorting when `preferred_time` is missing on every task.
+I'm fairly confident in the core behavior: all 24 tests pass and I read the `main.py` output against the inputs. I'm less confident about edge cases I haven't tested: a task longer than the whole day, tasks running past midnight (the code skips them, but no test checks it), two pets with the same name (the `pet_name` lookup in `complete_task` would pick the first), an empty owner with no pets, and completing the same recurring task twice, which creates two copies. I would test those next, plus sorting when `preferred_time` is missing on every task.
 
 ---
 
@@ -82,7 +89,7 @@ I'm most satisfied with keeping the data classes simple and putting all the logi
 
 **b. What you would improve**
 
-I'd make the planner respect `preferred_time` and fill gaps instead of stacking everything from 8:00. I'd also give recurring tasks an actual due date (the next occurrence is currently just a copy with no date), and add real calendar dates to tasks so a "weekly" task is not only a label.
+I'd make the planner respect `preferred_time` and fill gaps instead of stacking everything from 8:00. I'd also add a calendar view with real dates, so a "weekly" task shows up on the right day instead of only being a label that sets the next `due_date`.
 
 **c. Key takeaway**
 

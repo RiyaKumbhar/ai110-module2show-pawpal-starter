@@ -42,6 +42,18 @@ pip install -r requirements.txt
 6. Connect your logic to the Streamlit UI in `app.py`.
 7. Refine UML so it matches what you actually built.
 
+## ✨ Features
+
+- **Multi-pet care tracking:** one owner, many pets, each with their own tasks (walks, feeding, meds, enrichment, grooming).
+- **Priority-based sorting:** tasks are ordered high to low, then by earliest due time, then shortest first (`Scheduler.sort_tasks`).
+- **Sorting by time:** view tasks by preferred time of day instead (`Scheduler.sort_by_time`).
+- **Filtering:** by pet, completion status, and category, across all pets (`Scheduler.filter_tasks`).
+- **Time-budgeted daily plan:** fits tasks into the owner's available minutes and lists what was skipped, with a reason for each (`Scheduler.generate_plan`).
+- **Plan explanations:** every scheduled task shows why it was chosen, such as priority, due time, or repeat frequency.
+- **Conflict warnings:** flags tasks whose preferred times overlap, for the same pet or different pets, without crashing (`Scheduler.find_time_conflicts`), and detects overlaps inside a built plan (`Scheduler.detect_conflicts`).
+- **Daily and weekly recurrence:** completing a recurring task creates the next one, due tomorrow or next week (`Scheduler.complete_task`, `Task.next_occurrence`).
+- **Streamlit UI:** add pets and tasks, filter and sort the task list, mark tasks complete, and generate the schedule from the browser.
+
 ## 🏗️ Implementation Summary
 
 The logic layer lives in `pawpal_system.py` (UML in `diagrams/uml.mmd`). Run the CLI demo with `python main.py`.
@@ -59,7 +71,7 @@ The logic layer lives in `pawpal_system.py` (UML in `diagrams/uml.mmd`). Run the
 
 ## 🖥️ Sample Output
 
-Output of `python main.py`, which builds one owner, two pets, and six tasks, then prints the generated plan:
+Full output of `python main.py`:
 
 ```
 ====================================================
@@ -96,6 +108,29 @@ Total scheduled: 80 min
 
 --- Completing a recurring task ---
   'Morning walk' done; next occurrence created: True
+  next 'Morning walk' is due Monday, Oct 19
+
+--- Filter by status: completed vs pending ---
+  Completed:
+    Morning walk (Biscuit)
+  Pending:
+    Brush coat (Biscuit)
+    Morning walk (Biscuit)
+    Give medication (Mochi)
+    Breakfast (Mochi)
+    Laser pointer play (Mochi)
+    Clean litter box (Mochi)
+
+--- Filter by pet AND status (Biscuit, pending) ---
+  Brush coat
+  Morning walk
+
+--- Same-time warnings (lightweight check) ---
+  WARNING: 'Vet call' (Biscuit) at 09:00 overlaps 'Give medication' (Mochi) at 09:00 [different pets]
+  WARNING: 'Vet call' (Biscuit) at 09:00 overlaps 'Teeth brushing' (Biscuit) at 09:05 [same pet]
+
+--- Conflict detection (two tasks forced to overlap) ---
+  CONFLICT: Breakfast overlaps Breakfast
 ```
 
 ## 🧪 Testing PawPal+
@@ -111,11 +146,11 @@ pytest --cov
 Sample test output:
 
 ```
-tests/test_pawpal.py ...........                                         [100%]
-============================== 16 passed in 0.01s ==============================
+tests/test_pawpal.py ........................                            [100%]
+============================== 24 passed in 0.02s ==============================
 ```
 
-The 16 tests cover task completion, adding tasks to pets, gathering tasks across pets, sorting, filtering, time-limited planning, conflict detection and same-time warnings, and recurring tasks with due dates.
+The 24 tests cover task completion, adding tasks to pets, gathering tasks across pets, sorting, filtering, time-limited planning, conflict detection and same-time warnings, and recurring tasks with due dates.
 
 ## 📐 Smarter Scheduling
 
@@ -139,16 +174,62 @@ All of these live on `Scheduler` in `pawpal_system.py` (except `Task.next_occurr
 
 ## 📸 Demo Walkthrough
 
-Describe your app in numbered steps so a reader can follow along without watching a video:
+Start the app with `streamlit run app.py` (it opens at http://localhost:8501).
 
-1. <!-- Describe this step -->
-2. <!-- Describe this step -->
-3. <!-- Describe this step -->
-4. <!-- Describe this step -->
-5. <!-- Add more steps as needed -->
+**What you can do in the UI**
+- **Owner:** set your name and how many minutes you have today.
+- **Pets:** add a pet with a name and species. Empty or duplicate names are rejected.
+- **Tasks:** add a task for a pet with a title, duration, priority, category, how often it repeats, and an optional due time.
+- **Task list:** filter by pet, status, or category, sort by priority or by preferred time, and mark a task complete.
+- **Build Schedule:** generate today's plan, see why each task was chosen, and see anything skipped or conflicting.
+
+**Example workflow**
+1. Set "Minutes available today" to 60.
+2. Add a pet, "Mochi" (cat).
+3. Add three tasks for Mochi: "Give medication" (5 min, high, daily), "Breakfast" (10 min, high, daily), and "Laser pointer play" (20 min, medium).
+4. Sort the task list by preferred time, then filter to pending tasks only.
+5. Click **Generate schedule** to see today's plan with a reason for each task.
+6. Mark "Give medication" complete. Because it repeats daily, a new copy appears, due tomorrow.
+
+**Scheduler behaviors you will see**
+- **Sorting:** high-priority tasks come first in the plan; the same list can be re-sorted by preferred time.
+- **Skipping:** a task that doesn't fit in the remaining minutes is listed as skipped, with the number of minutes left.
+- **Conflict warnings:** tasks with overlapping preferred times show a warning next to the task list, and overlapping slots in a plan show an error.
+- **Recurrence:** completing a daily or weekly task adds the next occurrence automatically.
+
+**Sample CLI output** (`python main.py`). The start of the run shows the generated plan:
+
+```
+====================================================
+  Today's Schedule for Riya (90 min available)
+====================================================
+Daily plan for Sunday, October 18:
+  08:00 — Breakfast (10 min) [priority: high] (Mochi)
+      why: high priority, due by 09:00, repeats daily
+  08:10 — Give medication (5 min) [priority: high] (Mochi)
+      why: high priority, due by 09:30, repeats daily
+  08:15 — Morning walk (30 min) [priority: high] (Biscuit)
+      why: high priority, due by 10:00, repeats daily
+  08:45 — Clean litter box (15 min) [priority: medium] (Mochi)
+      why: medium priority
+  09:00 — Laser pointer play (20 min) [priority: medium] (Mochi)
+      why: medium priority
+Skipped:
+  Brush coat (Biscuit) — not enough time left (10 min remaining)
+```
+
+And the end of the run shows the filtering, recurrence, and conflict checks:
+
+```
+--- Same-time warnings (lightweight check) ---
+  WARNING: 'Vet call' (Biscuit) at 09:00 overlaps 'Give medication' (Mochi) at 09:00 [different pets]
+  WARNING: 'Vet call' (Biscuit) at 09:00 overlaps 'Teeth brushing' (Biscuit) at 09:05 [same pet]
+
+--- Conflict detection (two tasks forced to overlap) ---
+  CONFLICT: Breakfast overlaps Breakfast
+```
 
 **Screenshot or video** *(optional)*: <!-- Insert a screenshot or link to a demo video here -->
-
 
 ## Testing PawPal+
 

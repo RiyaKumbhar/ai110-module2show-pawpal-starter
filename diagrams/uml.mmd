@@ -21,6 +21,7 @@ classDiagram
         +edit_task(task_id, changes) void
         +remove_task(task_id) void
         +get_pending_tasks() list~Task~
+        -_find(task_id) Task
     }
 
     class Task {
@@ -31,10 +32,12 @@ classDiagram
         +str priority
         +time preferred_time
         +time due_time
+        +date due_date
         +str pet_name
         +str frequency
         +bool completed
         +mark_complete() void
+        +next_occurrence(today) Task
         +update(changes) void
         +is_high_priority() bool
     }
@@ -49,27 +52,34 @@ classDiagram
     }
 
     class DailyPlan {
-        +date date
+        +date plan_date
         +list~ScheduledItem~ scheduled
         +list skipped
         +int total_minutes
         +add_item(item) void
-        +summary() str
         +remaining_minutes(owner) int
+        +summary() str
     }
 
     class Scheduler {
         +Owner owner
         +time day_start
         +sort_tasks(tasks) list~Task~
-        +generate_plan() DailyPlan
+        +sort_by_time(tasks) list~Task~
+        +filter_tasks(pet_name, completed, category) list~Task~
         +detect_conflicts(items) list
+        +find_time_conflicts(tasks) list~str~
+        +complete_task(task) Task
+        +generate_plan() DailyPlan
         +explain_choice(task) str
     }
 
     Owner "1" --> "*" Pet : has
     Pet "1" --> "*" Task : has
-    Scheduler --> Owner : uses
+    Task ..> Task : next_occurrence creates copy
+    Scheduler --> Owner : reads tasks via get_all_tasks
+    Scheduler ..> Task : sorts, filters, completes
+    Scheduler ..> ScheduledItem : creates
     Scheduler ..> DailyPlan : produces
     DailyPlan "1" --> "*" ScheduledItem : contains
     ScheduledItem --> Task : schedules
